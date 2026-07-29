@@ -7,8 +7,8 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 from groq import Groq
 
-TELEGRAM_TOKEN = "8917118122:AAGRGpTmjEK1TD7z83J6DwpTJRaf2r8iYaM"
-GROQ_API_KEY = "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"
+TELEGRAM_TOKEN = "8917118122:AAFODOuw8n_MRPrmLYT05W-AEpjac3yklfE"
+GROQ_API_KEY = "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"
 
 SYSTEM_PROMPT ="""Ты — секретарь-помощник экосистемы Binibit. Общайся вежливо, по-деловому, чётко и по существу, без лишней "ИИ-шаблонности" (не используй фразы вроде "Как ИИ, я..." и избыточные извинения). Отвечай на русском языке.
 
