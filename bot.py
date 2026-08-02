@@ -6,6 +6,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 from groq import Groq
+from stats import init_db, log_message, get_stats, stats_command
 
 TELEGRAM_TOKEN = "8917118122:AAFODOuw8n_MRPrmLYT05W-AEpjac3yklfE"
 GROQ_API_KEY = "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"
@@ -97,6 +98,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_text = update.message.text
+    log_message(user_id, update.effective_user.username, user_text)
 
     if user_id not in conversation_history:
         conversation_history[user_id] = []
@@ -129,9 +131,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    init_db()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("reset", reset))
+    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     print("Bot started. Press Ctrl+C to stop.")
