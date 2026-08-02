@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, Comma
 from groq import Groq
 
 TELEGRAM_TOKEN = "8917118122:AAFODOuw8n_MRPrmLYT05W-AEpjac3yklfE"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 SYSTEM_PROMPT = """Ты — секретарь-помощник экосистемы Binibit. Общайся вежливо, по-деловому, чётко и по существу, без лишней ИИ-шаблонности. Отвечай на русском языке.
 
