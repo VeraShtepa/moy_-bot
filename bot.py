@@ -124,5 +124,5 @@ def main():
     print("Bot started. Press Ctrl+C to stop.")
     app.run_polling()
 
-if name == "__main__":
-    main()
+if name == "__main__":
+main()
