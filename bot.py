@@ -51,3 +51,78 @@ binibit.com со ссылкой-кодом 3jzxsj
 Как зарегистрироваться: t.me/binibirga/16
 Как пройти верификацию: t.me/binibirga/27
 Как купить монету BINI: t.me/binibirga/19
+Как поставить стейкинг: t.me/binibirga/21
+Где найти свой UID: t.me/binibirga/22
+Как сделать внутренний перевод в проекте: t.me/binibirga/23
+Не присылай видео-ссылку, если пользователь не спрашивал про конкретное пошаговое действие.
+ПРАВИЛА ОФОРМЛЕНИЯ ОТВЕТОВ:
+Отвечай максимально кратко — не больше 2-3 коротких предложений.
+Не пиши длинные тексты. Дели информацию на маленькие части.
+"""
+
+MODEL = "llama-3.1-8b-instant"
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+client = AsyncGroq(api_key=GROQ_API_KEY)
+conversation_history = {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    conversation_history[user_id] = []
+    await update.message.reply_text(
+        "Privet! Ya bot-pomoshnik. Prosto napishite mne vopros."
+    )
+
+async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    conversation_history[user_id] = []
+    await update.message.reply_text("Istoriya razgovora ochishchena.")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_text = update.message.text
+    log_message(user_id, update.effective_user.username, user_text)
+
+    if user_id not in conversation_history:
+        conversation_history[user_id] = []
+
+    conversation_history[user_id].append({"role": "user", "content": user_text})
+    conversation_history[user_id] = conversation_history[user_id][-20:]
+
+    try:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversation_history[user_id]
+
+        response = await client.chat.completions.create(
+            model=MODEL,
+            max_tokens=1000,
+            messages=messages,
+        )
+
+        reply_text = response.choices[0].message.content
+        conversation_history[user_id].append({"role": "assistant", "content": reply_text})
+
+        await update.message.reply_text(reply_text)
+
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(
+            "Oshibka pri obrashchenii k II. Poprobuyte eshche raz."
+        )
+
+def main():
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    init_db()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("reset", reset))
+    app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("Bot started. Press Ctrl+C to stop.")
+    app.run_polling()
+
+if name == "__main__":
+    main()           
