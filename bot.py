@@ -71,7 +71,7 @@ Binibit — криптоэкосистема нового поколения, о
 1. Отвечай максимально кратко — не больше 2-3 коротких предложений.
 2. Не пиши длинные тексты. Дели информацию на маленькие части.
 """
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "llama-3.1-8b-instant"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
