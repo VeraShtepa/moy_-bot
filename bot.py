@@ -8,7 +8,7 @@ from groq import AsyncGroq
 from stats import init_db, log_message, get_stats, stats_command
 
 TELEGRAM_TOKEN = "8917118122:AAFvqSYmrmusMGIOvZuX7tbCv2sC9mumqIY"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 SYSTEM_PROMPT = """Ты — живой, общительный, умный и харизматичный ассистент и официальный копирайтер экосистемы Binibit. Отвечай на русском языке.
 
