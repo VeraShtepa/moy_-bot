@@ -1,14 +1,23 @@
 """
-Telegram bot with AI via Groq.
+Telegram bot with AI via Google Gemini.
 """
 import logging
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
-from groq import AsyncGroq
+import google.generativeai as genai
 from stats import init_db, log_message, get_stats, stats_command
 
 TELEGRAM_TOKEN = "8917118122:AAHkMH9nYamBqzDHyqgluzdkyH13Uqufs2g"
-GROQ_API_KEY = "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"
+
+# Ключ берём из переменной окружения GEMINI_API_KEY на Railway (Variables).
+GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6JiBobgfn3U_URIKb1l7oa9chg0TmL7-oD4cTg-5hQIgw", "")
+genai.configure(api_key=GEMINI_API_KEY)
+
+if not GEMINI_API_KEY:
+    print("⚠️ ВНИМАНИЕ: переменная GEMINI_API_KEY пустая или не найдена на Railway!")
+else:
+    print(f"Gemini API key загружен, длина: {len(GEMINI_API_KEY)} символов")
 
 SYSTEM_PROMPT = """Ты — живой, общительный, умный и харизматичный ассистент и официальный копирайтер экосистемы Binibit. Отвечай на русском языке.
 
@@ -79,13 +88,14 @@ binibit.com со ссылкой-кодом 3jzxsj
 Не присылай видео-ссылку, если пользователь не спрашивал про конкретное пошаговое действие.
 """
 
-MODEL = "openai/gpt-oss-20b"
+MODEL = "gemini-flash-latest"
+HISTORY_LIMIT = 10
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = AsyncGroq(api_key=GROQ_API_KEY)
 conversation_history = {}
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -94,10 +104,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Privet! Ya bot-pomoshnik. Prosto napishite mne vopros."
     )
 
+
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     conversation_history[user_id] = []
     await update.message.reply_text("Istoriya razgovora ochishchena.")
+
+
+def build_gemini_history(history):
+    """Переводит нашу историю [{'role': 'user'/'assistant', 'content': ...}]
+    в формат, который понимает Gemini: [{'role': 'user'/'model', 'parts': [...]}, ...]"""
+    gemini_history = []
+    for msg in history:
+        role = "model" if msg["role"] == "assistant" else "user"
+        gemini_history.append({"role": role, "parts": [msg["content"]]})
+    return gemini_history
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -109,31 +131,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conversation_history[user_id] = []
 
     conversation_history[user_id].append({"role": "user", "content": user_text})
-    conversation_history[user_id] = conversation_history[user_id][-20:]
+    conversation_history[user_id] = conversation_history[user_id][-HISTORY_LIMIT:]
 
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
         personalized_prompt = SYSTEM_PROMPT + f"\n\nИмя собеседника: {user_name}. Обращайся к нему по имени, но не в каждом сообщении подряд — естественно, как это делают живые люди (например, в приветствии, когда хочешь подчеркнуть внимание, или когда упоминаешь что-то личное), а не как формальность в конце каждой фразы."
 
-        messages = [{"role": "system", "content": personalized_prompt}] + conversation_history[user_id]
-
-        response = await client.chat.completions.create(
-            model=MODEL,
-            max_tokens=1000,
-            messages=messages,
+        model = genai.GenerativeModel(
+            model_name=MODEL,
+            system_instruction=personalized_prompt,
         )
 
-        reply_text = response.choices[0].message.content
+        gemini_history = build_gemini_history(conversation_history[user_id])
+
+        response = model.generate_content(
+            gemini_history,
+            generation_config=genai.types.GenerationConfig(max_output_tokens=500),
+        )
+        reply_text = response.text
+
         conversation_history[user_id].append({"role": "assistant", "content": reply_text})
 
         await update.message.reply_text(reply_text)
 
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Error: {type(e).__name__}: {e!r} | args={e.args}")
         await update.message.reply_text(
             "Oshibka pri obrashchenii k II. Poprobuyte eshche raz."
         )
+
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
