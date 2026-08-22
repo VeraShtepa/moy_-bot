@@ -11,7 +11,7 @@ from stats import init_db, log_message, get_stats, stats_command
 TELEGRAM_TOKEN = "8917118122:AAHkMH9nYamBqzDHyqgluzdkyH13Uqufs2g"
 
 # Ключ берём из переменной окружения GEMINI_API_KEY на Railway (Variables).
-GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6JiBobgfn3U_URIKb1l7oa9chg0TmL7-oD4cTg-5hQIgw", "")
+GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6I5Z90cRU7qkEdpvsOYFBSp6pTYVhwOAwJlQT52Y77MkQ", "")
 genai.configure(api_key=GEMINI_API_KEY)
 
 if not GEMINI_API_KEY:
