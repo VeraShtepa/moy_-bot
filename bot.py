@@ -3,6 +3,8 @@ Telegram bot with AI via Google Gemini.
 """
 import logging
 import os
+import re
+import edge_tts
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
 import google.generativeai as genai
@@ -11,7 +13,7 @@ from stats import init_db, log_message, get_stats, stats_command
 TELEGRAM_TOKEN = "8917118122:AAHkMH9nYamBqzDHyqgluzdkyH13Uqufs2g"
 
 # Ключ берём из переменной окружения GEMINI_API_KEY на Railway (Variables).
-GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6I5Z90cRU7qkEdpvsOYFBSp6pTYVhwOAwJlQT52Y77MkQ", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 genai.configure(api_key=GEMINI_API_KEY)
 
 if not GEMINI_API_KEY:
@@ -41,6 +43,9 @@ SYSTEM_PROMPT = """Ты — живой, общительный, умный и х
 
 КРИТИЧЕСКИ ВАЖНО (ЧЕСТНОСТЬ И ФАКТЫ):
 В фактах, цифрах и информации о Binibit опирайся только на данные ниже. Ничего не выдумывай и не фантазируй. Если чего-то точно не знаешь — так и скажи, можно с лёгким юмором, но без отсебятины.
+
+ЧЕСТНОСТЬ ПРО РИСКИ:
+Криптовалюты и инвестиции — это всегда риск, и ты не скрываешь этого от собеседника, даже оставаясь позитивным и вовлечённым. Не обещай гарантированную прибыль и не говори, что "нельзя потерять деньги" — доходность (в том числе цифры по стейкингу) не гарантирована и может меняться. Когда разговор доходит до конкретных решений — сколько вложить, стоит ли заходить именно сейчас, стоит ли вкладывать последние/заёмные деньги — мягко, но честно напомни, что решение стоит принимать на трезвую голову: не вкладывать больше, чем готовы потерять, и не торопиться под давлением. Это не формальная отписка в конце каждого сообщения, а естественная часть честного разговора — упоминай это к месту, когда человек обсуждает суммы или решается на шаг, а не в каждом ответе подряд.
 
 ПРИОРИТЕТ ЭКОСИСТЕМЫ BINIBIT:
 Твоя главная цель — знакомить пользователя с экосистемой Binibit и развивать проект. Вся информация про BINI должна подаваться через призму Binibit. Строго запрещено отправлять пользователей на сторонние ресурсы вроде CoinGecko, CoinMarketCap и т.д. — направляй на наши внутренние инструменты (Mini App, канал, регистрацию). Не тверди про Launchpad/Launchpool без повода — используй эти слова только если пользователь сам явно спросил про них.
@@ -121,12 +126,7 @@ def build_gemini_history(history):
     return gemini_history
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user_text = update.message.text
-    user_name = update.effective_user.first_name or "друг"
-    log_message(user_id, update.effective_user.username, user_text)
-
+async def process_ai_response(user_id, user_name, user_text, update, context, send_as_voice=False):
     if user_id not in conversation_history:
         conversation_history[user_id] = []
 
@@ -134,7 +134,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conversation_history[user_id] = conversation_history[user_id][-HISTORY_LIMIT:]
 
     try:
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        action = "record_voice" if send_as_voice else "typing"
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=action)
 
         personalized_prompt = SYSTEM_PROMPT + f"\n\nИмя собеседника: {user_name}. Обращайся к нему по имени, но не в каждом сообщении подряд — естественно, как это делают живые люди (например, в приветствии, когда хочешь подчеркнуть внимание, или когда упоминаешь что-то личное), а не как формальность в конце каждой фразы."
 
@@ -153,13 +154,88 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         conversation_history[user_id].append({"role": "assistant", "content": reply_text})
 
-        await update.message.reply_text(reply_text)
+        if send_as_voice:
+            audio_path = f"answer_{user_id}_{update.update_id}.mp3"
+            # "24/7" и подобное иначе прочитается слитно как одно число ("247")
+            spoken_text = re.sub(r'(\d)/(\d)', r'\1 \2', reply_text)
+            clean_text = re.sub(r'[^\w\s,?!.\-:;—"\'()А-Яа-яЁё]', '', spoken_text)
+            tts = edge_tts.Communicate(clean_text, voice="ru-RU-DmitryNeural")
+            await tts.save(audio_path)
+            try:
+                with open(audio_path, "rb") as voice_file:
+                    await update.message.reply_voice(voice=voice_file)
+            finally:
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+        else:
+            await update.message.reply_text(reply_text)
 
     except Exception as e:
         logger.error(f"Error: {type(e).__name__}: {e!r} | args={e.args}")
         await update.message.reply_text(
             "Oshibka pri obrashchenii k II. Poprobuyte eshche raz."
         )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_text = update.message.text
+    user_name = update.effective_user.first_name or "друг"
+    log_message(user_id, update.effective_user.username, user_text)
+
+    await process_ai_response(user_id, user_name, user_text, update, context, send_as_voice=False)
+
+
+async def transcribe_voice(voice_path):
+    """Распознаём голосовое через Gemini. Передаём байты аудио прямо в запрос,
+    без отдельной загрузки файла — так работает даже с обычным API-ключом."""
+    with open(voice_path, "rb") as f:
+        audio_bytes = f.read()
+
+    model = genai.GenerativeModel(model_name=MODEL)
+    response = model.generate_content(
+        [
+            "Расшифруй это голосовое сообщение в текст на русском языке. "
+            "В ответе верни только сам текст, без каких-либо пояснений и комментариев.",
+            {"mime_type": "audio/ogg", "data": audio_bytes},
+        ]
+    )
+    return response.text.strip()
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка голосовых сообщений"""
+    message = update.message
+    user_id = update.effective_user.id
+    is_private = message.chat.type == "private"
+
+    if not is_private:
+        return
+
+    voice_path = f"user_voice_{user_id}_{message.message_id}.ogg"
+    try:
+        voice_file = await context.bot.get_file(update.message.voice.file_id)
+        await voice_file.download_to_drive(voice_path)
+
+        user_text = await transcribe_voice(voice_path)
+
+        if not user_text or not user_text.strip():
+            await update.message.reply_text(
+                "Не удалось разобрать голосовое сообщение — попробуйте сказать чуть чётче и громче."
+            )
+            return
+
+        log_message(user_id, update.effective_user.username, f"[Голосовое]: {user_text}")
+
+        user_name = update.effective_user.first_name or "друг"
+        await process_ai_response(user_id, user_name, user_text, update, context, send_as_voice=True)
+
+    except Exception as e:
+        logger.error(f"Voice Error: {e}")
+        await update.message.reply_text("Не удалось распознать голосовое сообщение.")
+    finally:
+        if os.path.exists(voice_path):
+            os.remove(voice_path)
 
 
 def main():
@@ -169,6 +245,7 @@ def main():
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     print("Bot started. Press Ctrl+C to stop.")
     app.run_polling()
