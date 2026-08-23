@@ -1,7 +1,4 @@
 python-telegram-bot==22.8
 google-generativeai
-httpx==0.27.2
-uvicorn
-fastapi
-pydantic
+httpx==0.28.1
 edge-tts
