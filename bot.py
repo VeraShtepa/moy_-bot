@@ -93,7 +93,7 @@ binibit.com со ссылкой-кодом 3jzxsj
 Не присылай видео-ссылку, если пользователь не спрашивал про конкретное пошаговое действие.
 """
 
-MODEL = "gemini-flash-latest"
+MODEL = "gemini-flash-lite-latest"
 HISTORY_LIMIT = 10
 
 logging.basicConfig(level=logging.INFO)
