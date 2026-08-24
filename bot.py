@@ -148,7 +148,7 @@ async def process_ai_response(user_id, user_name, user_text, update, context, se
 
         response = model.generate_content(
             gemini_history,
-            generation_config=genai.types.GenerationConfig(max_output_tokens=500),
+            generation_config=genai.types.GenerationConfig(max_output_tokens=800),
         )
         reply_text = response.text
 
