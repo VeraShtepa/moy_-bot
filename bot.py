@@ -4,6 +4,7 @@ Telegram bot with AI via Google Gemini.
 import logging
 import os
 import re
+import httpx
 import edge_tts
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, CommandHandler, filters
@@ -101,6 +102,26 @@ logger = logging.getLogger(__name__)
 
 conversation_history = {}
 
+PRICE_KEYWORDS = ["курс", "цена", "цену", "стоит", "стоимост", "почём", "почем", "price", "подорожал", "подешевел"]
+
+
+async def get_bini_price():
+    """Получает актуальный курс BINI с CoinGecko. Возвращает (price, change_24h) или None при ошибке."""
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            resp = await client.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "binibit", "vs_currencies": "usd", "include_24hr_change": "true"},
+            )
+            data = resp.json()
+            info = data.get("binibit")
+            if not info or "usd" not in info:
+                return None
+            return info.get("usd"), info.get("usd_24h_change")
+    except Exception as e:
+        logger.error(f"CoinGecko Error: {e}")
+        return None
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -138,6 +159,23 @@ async def process_ai_response(user_id, user_name, user_text, update, context, se
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=action)
 
         personalized_prompt = SYSTEM_PROMPT + f"\n\nИмя собеседника: {user_name}. Обращайся к нему по имени, но не в каждом сообщении подряд — естественно, как это делают живые люди (например, в приветствии, когда хочешь подчеркнуть внимание, или когда упоминаешь что-то личное), а не как формальность в конце каждой фразы."
+
+        if any(kw in user_text.lower() for kw in PRICE_KEYWORDS):
+            price_data = await get_bini_price()
+            if price_data:
+                price, change = price_data
+                change_text = f"{change:+.2f}%" if change is not None else "нет данных"
+                personalized_prompt += (
+                    f"\n\nАКТУАЛЬНЫЙ КУРС BINI ПРЯМО СЕЙЧАС (данные с CoinGecko): ${price:.4f}, "
+                    f"изменение за 24 часа: {change_text}. Если человек спрашивает про текущий курс BINI — "
+                    f"используй именно эти цифры, не выдумывай другие и не бери из общих фактов ниже."
+                )
+            else:
+                personalized_prompt += (
+                    "\n\nНе удалось получить актуальный курс BINI прямо сейчас (техническая проблема с получением данных). "
+                    "Если человек спрашивает про текущий курс — честно скажи, что сейчас не можешь получить свежие данные, "
+                    "и предложи посмотреть его в приложении/на бирже. Не выдумывай цифру."
+                )
 
         model = genai.GenerativeModel(
             model_name=MODEL,
