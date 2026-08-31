@@ -11,7 +11,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, Comma
 import google.generativeai as genai
 from stats import init_db, log_message, get_stats, stats_command
 
-TELEGRAM_TOKEN = "8917118122:AAHkMH9nYamBqzDHyqgluzdkyH13Uqufs2g"
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 
 # Ключ берём из переменной окружения GEMINI_API_KEY на Railway (Variables).
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
