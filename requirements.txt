@@ -1,4 +1,3 @@
-python-telegram-bot==22.8
-google-generativeai
-httpx==0.28.1
-edge-tts
+is_private = message.chat.type == "private"
+if not is_private:
+    return  # тишина, без ошибок и без ответа
