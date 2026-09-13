@@ -1,3 +1,3 @@
-is_private = message.chat.type == "private"
-if not is_private:
-    return  # тишина, без ошибок и без ответа
+python-telegram-bot
+google-generativeai
+edge-tts
